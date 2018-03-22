@@ -1,6 +1,16 @@
 Change Log
 ==========
 
+## Version 2.8.2
+_2017-09-19_  [GitHub Diff](https://github.com/google/gson/compare/gson-parent-2.8.1...gson-parent-2.8.2)
+ * Introduced a new API, `JsonElement.deepCopy()`
+ * Numerous other bugfixes
+
+## Version 2.8.1
+_2017-05-30_  [GitHub Diff](https://github.com/google/gson/compare/gson-parent-2.8.0...gson-parent-2.8.1)
+ * New: `JsonObject.keySet()`
+ * `@JsonAdapter` annotation can now use `JsonSerializer` and `JsonDeserializer` as well.
+
 ## Version 2.8
 _2016-10-26_  [GitHub Diff](https://github.com/google/gson/compare/gson-parent-2.7...gson-parent-2.8.0)
  * New: `TypeToken.getParameterized()` and `TypeToken.getArray()` make it easier to
@@ -73,7 +83,7 @@ _2015-10-04_
 
 ## Version 2.3.1
 
-__2014-11-20_
+_2014-11-20_
 
  * Added support to serialize objects with self-referential fields. The self-referential field is set to null in JSON. Previous version of Gson threw a StackOverflowException on encountering any self-referential fields.
    * The most visible impact of this is that Gson can now serialize Throwable (Exception and Error)

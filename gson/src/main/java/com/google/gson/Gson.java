@@ -25,6 +25,7 @@ import java.io.Writer;
 import java.lang.reflect.Type;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.text.DateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -109,7 +110,7 @@ public final class Gson {
   static final boolean DEFAULT_COMPLEX_MAP_KEYS = false;
   static final boolean DEFAULT_SPECIALIZE_FLOAT_VALUES = false;
 
-  private static final TypeToken<?> NULL_KEY_SURROGATE = new TypeToken<Object>() {};
+  private static final TypeToken<?> NULL_KEY_SURROGATE = TypeToken.get(Object.class);
   private static final String JSON_NON_EXECUTABLE_PREFIX = ")]}'\n";
 
   /**
@@ -124,17 +125,27 @@ public final class Gson {
 
   private final Map<TypeToken<?>, TypeAdapter<?>> typeTokenCache = new ConcurrentHashMap<TypeToken<?>, TypeAdapter<?>>();
 
-  private final List<TypeAdapterFactory> factories;
   private final ConstructorConstructor constructorConstructor;
-
-  private final Excluder excluder;
-  private final FieldNamingStrategy fieldNamingStrategy;
-  private final boolean serializeNulls;
-  private final boolean htmlSafe;
-  private final boolean generateNonExecutableJson;
-  private final boolean prettyPrinting;
-  private final boolean lenient;
   private final JsonAdapterAnnotationTypeAdapterFactory jsonAdapterFactory;
+
+  final List<TypeAdapterFactory> factories;
+
+  final Excluder excluder;
+  final FieldNamingStrategy fieldNamingStrategy;
+  final Map<Type, InstanceCreator<?>> instanceCreators;
+  final boolean serializeNulls;
+  final boolean complexMapKeySerialization;
+  final boolean generateNonExecutableJson;
+  final boolean htmlSafe;
+  final boolean prettyPrinting;
+  final boolean lenient;
+  final boolean serializeSpecialFloatingPointValues;
+  final String datePattern;
+  final int dateStyle;
+  final int timeStyle;
+  final LongSerializationPolicy longSerializationPolicy;
+  final List<TypeAdapterFactory> builderFactories;
+  final List<TypeAdapterFactory> builderHierarchyFactories;
 
   /**
    * Constructs a Gson object with default configuration. The default configuration has the
@@ -175,23 +186,36 @@ public final class Gson {
         Collections.<Type, InstanceCreator<?>>emptyMap(), DEFAULT_SERIALIZE_NULLS,
         DEFAULT_COMPLEX_MAP_KEYS, DEFAULT_JSON_NON_EXECUTABLE, DEFAULT_ESCAPE_HTML,
         DEFAULT_PRETTY_PRINT, DEFAULT_LENIENT, DEFAULT_SPECIALIZE_FLOAT_VALUES,
-        LongSerializationPolicy.DEFAULT, Collections.<TypeAdapterFactory>emptyList());
+        LongSerializationPolicy.DEFAULT, null, DateFormat.DEFAULT, DateFormat.DEFAULT,
+        Collections.<TypeAdapterFactory>emptyList(), Collections.<TypeAdapterFactory>emptyList(),
+        Collections.<TypeAdapterFactory>emptyList());
   }
 
   Gson(final Excluder excluder, final FieldNamingStrategy fieldNamingStrategy,
       final Map<Type, InstanceCreator<?>> instanceCreators, boolean serializeNulls,
       boolean complexMapKeySerialization, boolean generateNonExecutableGson, boolean htmlSafe,
       boolean prettyPrinting, boolean lenient, boolean serializeSpecialFloatingPointValues,
-      LongSerializationPolicy longSerializationPolicy,
-      List<TypeAdapterFactory> typeAdapterFactories) {
-    this.constructorConstructor = new ConstructorConstructor(instanceCreators);
+      LongSerializationPolicy longSerializationPolicy, String datePattern, int dateStyle,
+      int timeStyle, List<TypeAdapterFactory> builderFactories,
+      List<TypeAdapterFactory> builderHierarchyFactories,
+      List<TypeAdapterFactory> factoriesToBeAdded) {
     this.excluder = excluder;
     this.fieldNamingStrategy = fieldNamingStrategy;
+    this.instanceCreators = instanceCreators;
+    this.constructorConstructor = new ConstructorConstructor(instanceCreators);
     this.serializeNulls = serializeNulls;
+    this.complexMapKeySerialization = complexMapKeySerialization;
     this.generateNonExecutableJson = generateNonExecutableGson;
     this.htmlSafe = htmlSafe;
     this.prettyPrinting = prettyPrinting;
     this.lenient = lenient;
+    this.serializeSpecialFloatingPointValues = serializeSpecialFloatingPointValues;
+    this.longSerializationPolicy = longSerializationPolicy;
+    this.datePattern = datePattern;
+    this.dateStyle = dateStyle;
+    this.timeStyle = timeStyle;
+    this.builderFactories = builderFactories;
+    this.builderHierarchyFactories = builderHierarchyFactories;
 
     List<TypeAdapterFactory> factories = new ArrayList<TypeAdapterFactory>();
 
@@ -202,8 +226,8 @@ public final class Gson {
     // the excluder must precede all adapters that handle user-defined types
     factories.add(excluder);
 
-    // user's type adapters
-    factories.addAll(typeAdapterFactories);
+    // users' type adapters
+    factories.addAll(factoriesToBeAdded);
 
     // type adapters for basic platform types
     factories.add(TypeAdapters.STRING_FACTORY);
@@ -253,6 +277,16 @@ public final class Gson {
         constructorConstructor, fieldNamingStrategy, excluder, jsonAdapterFactory));
 
     this.factories = Collections.unmodifiableList(factories);
+  }
+
+  /**
+   * Returns a new GsonBuilder containing all custom factories and configuration used by the current
+   * instance.
+   *
+   * @return a GsonBuilder instance.
+   */
+  public GsonBuilder newBuilder() {
+    return new GsonBuilder(this);
   }
 
   public Excluder excluder() {
@@ -765,7 +799,8 @@ public final class Gson {
    * @param <T> the type of the desired object
    * @param json the string from which the object is to be deserialized
    * @param classOfT the class of T
-   * @return an object of type T from the string. Returns {@code null} if {@code json} is {@code null}.
+   * @return an object of type T from the string. Returns {@code null} if {@code json} is {@code null}
+   * or if {@code json} is empty.
    * @throws JsonSyntaxException if json is not a valid representation for an object of type
    * classOfT
    */
@@ -981,7 +1016,7 @@ public final class Gson {
   public String toString() {
     return new StringBuilder("{serializeNulls:")
         .append(serializeNulls)
-        .append("factories:").append(factories)
+        .append(",factories:").append(factories)
         .append(",instanceCreators:").append(constructorConstructor)
         .append("}")
         .toString();
